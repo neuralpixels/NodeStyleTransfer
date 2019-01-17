@@ -13,6 +13,11 @@ const defaultCallback = (progressPercent, progressMessage, isProcessing = true):
     })
 };
 
+interface Size {
+    width:number
+    height:number
+}
+
 export class StyleTransfer {
     constructor(
         parameters: { content: string, style: string, output: string, iterations?: number, statusCallback?: object }
@@ -60,6 +65,8 @@ export class StyleTransfer {
     public outputImageLayers: any;
     public iterations: number;
     public iteration: number;
+    public startSize: Size;
+    public endSize: Size;
 
     finalCleanup() {
         // //tf.dispose(this.variables);
@@ -77,9 +84,17 @@ export class StyleTransfer {
             this.vgg19 = new VGG19(this.variables);
             const contentTensorInt = await getImageAsTensor(this.content, true);
             const contentTensor = tf.cast(contentTensorInt, 'float32');
+            this.startSize = {
+                width:Math.floor(contentTensor.shape[1] / 2),
+                height:Math.floor(contentTensor.shape[1] / 2)
+            };
+            this.endSize = {
+                width:contentTensor.shape[1],
+                height:contentTensor.shape[1]
+            };
             const scaledContent = tf.image.resizeBilinear(
                 contentTensor,
-                [Math.floor(contentTensor.shape[1] / 2), Math.floor(contentTensor.shape[2] / 2)]
+                [this.startSize.height, this.startSize.width]
             );
             this.outputImage = tf.variable(scaledContent, true, 'output');
             return true;
@@ -200,9 +215,9 @@ export class StyleTransfer {
 
     runIteration() {
         if (this.iteration === Math.floor(this.iterations / 2)) {
-            const size = {
-                width:Math.floor(this.outputImage.shape[2] * 2),
-                height:Math.floor(this.outputImage.shape[1] * 2)
+            const size:Size = {
+                width:this.endSize.width,
+                height:this.endSize.height
             };
             const newVar = tf.variable(tf.image.resizeBilinear(this.outputImage,[size.height, size.width]));
             tf.dispose(this.outputImage);

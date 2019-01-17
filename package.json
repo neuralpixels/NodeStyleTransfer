@@ -11,9 +11,11 @@
   "dependencies": {
     "@tensorflow/tfjs-node-gpu": "^0.2.3",
     "argparse": "^1.0.10",
+    "axios": "^0.18.0",
     "jimp": "^0.6.0"
   },
   "devDependencies": {
+    "@types/argparse": "^1.0.35",
     "@types/chai": "^4.1.7",
     "@types/jimp": "^0.2.28",
     "@types/mocha": "^5.2.5",

@@ -14,20 +14,23 @@ export function getImage(src:string):Promise<Jimp>{
     });
 }
 
-export function tensorToImage(inputs:tf.Tensor3D):Promise<Jimp>{
+export function tensorToImage(inputs:tf.Tensor3D|tf.Tensor):Promise<Jimp>{
     return new Promise((resolve, reject) => {
         const transposed = tf.transpose(inputs, [1, 0, 2]);
+        const clipped = tf.clipByValue(transposed,0, 255);
+        tf.dispose(transposed);
         let dtyped = null;
         if(inputs.dtype !== 'int32'){
-            dtyped = tf.cast(transposed, 'int32');
-            tf.dispose(transposed);
+            dtyped = tf.cast(clipped, 'int32');
+            tf.dispose(clipped);
         } else {
-            dtyped = transposed;
+            dtyped = clipped;
         }
         tf.dispose(inputs);
+        tf.dispose(clipped);
         const alpha = tf.fill([transposed.shape[0], transposed.shape[0], 1], 255, "int32");
         const rgba = tf.concat3d([dtyped, alpha], 2);
-        tf.dispose([dtyped, alpha]);
+        tf.dispose([clipped, alpha]);
         const width = rgba.shape[0];
         const height = rgba.shape[1];
         rgba.data().then(rawBuffer => {
@@ -50,7 +53,7 @@ export function tensorToImage(inputs:tf.Tensor3D):Promise<Jimp>{
     });
 }
 
-export function getImageAsTensor(src:string):Promise<tf.Tensor3D>{
+export function getImageAsTensor(src:string, expandDims:boolean = false):Promise<tf.Tensor3D|tf.Tensor>{
     return new Promise((resolve, reject) => {
         getImage(src).then(jimpImg => {
             const rgba = tf.tensor3d(jimpImg.bitmap.data, [jimpImg.bitmap.width, jimpImg.bitmap.height, 4]);
@@ -58,16 +61,31 @@ export function getImageAsTensor(src:string):Promise<tf.Tensor3D>{
             tf.dispose(rgba);
             const transposed = tf.transpose(rgb, [1, 0, 2]);
             tf.dispose(rgb);
-            resolve(transposed);
+            if(expandDims){
+                const expanded = tf.expandDims(transposed, 0);
+                tf.dispose(transposed);
+                resolve(expanded)
+            } else {
+                resolve(transposed);
+            }
         }).catch(err => {
             reject(err)
         });
     });
 }
 
-export function saveTensorAsImage(inputs:tf.Tensor3D, dest:string, ):Promise<null>{
+export function saveTensorAsImage(inputs:tf.Tensor3D|tf.Tensor4D|tf.Tensor, dest:string, ):Promise<null>{
     return new Promise((resolve, reject) => {
-        tensorToImage(inputs).then(jimpImg => {
+        let toSave = inputs;
+        if(inputs.shape.length === 4){
+            if(inputs.shape[0] !== 1){
+                reject(`Cannot convert batch size of ${inputs.shape[0]} to single image`);
+            } else {
+                toSave = tf.squeeze(inputs, [0]);
+                tf.dispose(inputs);
+            }
+        }
+        tensorToImage(toSave).then(jimpImg => {
             jimpImg.write(dest);
             resolve();
         }).catch(err => {

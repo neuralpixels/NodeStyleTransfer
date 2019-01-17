@@ -3,8 +3,9 @@ import tf from "./tensorflow";
 import VGG19 from './VGG19';
 import {getImageAsTensor, saveTensorAsImage} from './image';
 import {IVariables} from './modelLoader'
+import {valueMap} from './basic'
 
-const defaultCallback = (progressPercent, progressMessage, isProcessing = true):void => {
+const defaultCallback = (progressPercent, progressMessage, isProcessing = true): void => {
     console.log('NeuralNetRunner', {
         loadingPercent: progressPercent,
         loadingMessage: progressMessage,
@@ -16,7 +17,7 @@ export class StyleTransfer {
     constructor(
         parameters: { content: string, style: string, output: string, iterations?: number, statusCallback?: object }
     ) {
-        let {content, style, output, iterations=1000, statusCallback = defaultCallback} = parameters;
+        let {content, style, output, iterations = 1000, statusCallback = defaultCallback} = parameters;
         this.modelPath = 'https://neuralpixels.com/wp-content/plugins/np-visualize-vgg19/model';
         this.content = content;
         this.style = style;
@@ -29,7 +30,7 @@ export class StyleTransfer {
         this.vgg19 = null;
         this.isProcessing = true;
         this.pad = 10;
-        this.learningRate = 1e-1;
+        this.learningRate = 2.55;
         this.iterations = iterations;
         this.iteration = 0;
         this.optimizer = tf.train.adam(this.learningRate);
@@ -45,20 +46,20 @@ export class StyleTransfer {
     public output: string;
     public statusCallback: object;
     public displayName: string;
-    public net: object|null;
-    public variables:IVariables;
-    public manifest:object;
-    public vgg19:VGG19|null;
-    public isProcessing:boolean;
-    public pad:number;
-    public learningRate:number;
-    public optimizer:any;
-    public outputImage:tf.Tensor4D|tf.Tensor;
-    public contentLayers:any;
-    public styleLayers:any;
-    public outputImageLayers:any;
-    public iterations:number;
-    public iteration:number;
+    public net: object | null;
+    public variables: IVariables;
+    public manifest: object;
+    public vgg19: VGG19 | null;
+    public isProcessing: boolean;
+    public pad: number;
+    public learningRate: number;
+    public optimizer: any;
+    public outputImage: any;
+    public contentLayers: any;
+    public styleLayers: any;
+    public outputImageLayers: any;
+    public iterations: number;
+    public iteration: number;
 
     finalCleanup() {
         // //tf.dispose(this.variables);
@@ -75,19 +76,24 @@ export class StyleTransfer {
             this.variables = await loadRemoteVariablesPromise(this.modelPath);
             this.vgg19 = new VGG19(this.variables);
             const contentTensorInt = await getImageAsTensor(this.content, true);
-            const contentTensor = tf.cast(contentTensorInt, 'float32')
-            this.outputImage = tf.variable(contentTensor);
+            const contentTensor = tf.cast(contentTensorInt, 'float32');
+            const scaledContent = tf.image.resizeBilinear(
+                contentTensor,
+                [Math.floor(contentTensor.shape[1] / 2), Math.floor(contentTensor.shape[2] / 2)]
+            );
+            this.outputImage = tf.variable(scaledContent, true, 'output');
             return true;
         } catch (e) {
             return false;
         }
     }
+
     _seperated_l2_loss(y_pred, y_true) {
         let sum_axis = [1, 2];
         let _size = y_pred.shape[1] * y_pred.shape[2];
-        if(y_pred.shape.length === 4){
+        if (y_pred.shape.length === 4) {
             sum_axis = [1, 2, 3];
-            _size = y_pred.shape[1] * y_pred.shape[2] *  y_pred.shape[3];
+            _size = y_pred.shape[1] * y_pred.shape[2] * y_pred.shape[3];
         }
         const diff = tf.sub(y_pred, y_true);
         const abs_diff = tf.abs(diff);
@@ -107,7 +113,7 @@ export class StyleTransfer {
         return sepl2;
     }
 
-    _convert_to_gram_matrix(inputs){
+    _convert_to_gram_matrix(inputs) {
         const [batch, height, width, filters] = inputs.shape;
         const feats = tf.reshape(inputs, [batch, height * width, filters]);
         const feats_t = tf.transpose(feats, [0, 2, 1]);
@@ -119,10 +125,10 @@ export class StyleTransfer {
         return gram_matrix
     }
 
-    _styleLoss(){
+    _styleLoss() {
         let loss = tf.scalar(0.0);
         let next = loss;
-        for(let i = 0; i < this.vgg19.vgg19_style_layers.length; i++){
+        for (let i = 0; i < this.vgg19.vgg19_style_layers.length; i++) {
             const layerName = this.vgg19.vgg19_style_layers[i];
             const outputImageGrams = this._convert_to_gram_matrix(this.outputImageLayers[layerName]);
             const styleGrams = this._convert_to_gram_matrix(this.styleLayers[layerName]);
@@ -141,7 +147,7 @@ export class StyleTransfer {
             loss = next;
         }
         const numLayers = tf.scalar(this.vgg19.vgg19_style_layers.length, 'float32');
-        const avgLayerLoss = tf.div(loss,numLayers);
+        const avgLayerLoss = tf.div(loss, numLayers);
         //tf.dispose([numLayers, loss]);
         const styleWeight = tf.scalar(1e0, 'float32');
         const lossOutput = tf.mul(avgLayerLoss, styleWeight);
@@ -149,7 +155,7 @@ export class StyleTransfer {
         return lossOutput;
     }
 
-    loss = ()=> {
+    loss = () => {
         this.computeOutputImage();
         const styleLoss = this._styleLoss();
         const lossScalar = styleLoss.asScalar();
@@ -159,12 +165,12 @@ export class StyleTransfer {
     };
 
 
-    async process(iterations:number) {
+    async process(iterations: number) {
         this.iterations = iterations;
         this.iteration = 0;
         // await this.preComputeContent();
         await this.preComputeStyle();
-        for(let i = 0; i < iterations; i++){
+        for (let i = 0; i < iterations; i++) {
             await this.runIteration();
             this.iteration++;
         }
@@ -172,26 +178,36 @@ export class StyleTransfer {
         // this.finalCleanup();
     }
 
-    async preComputeContent(){
+    async preComputeContent() {
         // const content = tf.fromPixels(document.getElementById('content-canvas'));
         const content = await getImageAsTensor(this.content);
         const vggInput = this.vgg19.prepareInput(content);
         this.contentLayers = await this.vgg19.getLayers(vggInput, 'content');
     }
 
-    async preComputeStyle(){
+    async preComputeStyle() {
         // const content = tf.fromPixels(document.getElementById('style-canvas'));
         const style = await getImageAsTensor(this.style);
         const vggInput = this.vgg19.prepareInput(style);
         this.styleLayers = this.vgg19.getLayers(vggInput, 'style');
     }
 
-    computeOutputImage(){
-        const vggInput = this.vgg19.prepareInput(this.outputImage);
+    computeOutputImage() {
+        let vggIn = this.outputImage;
+        const vggInput = this.vgg19.prepareInput(vggIn);
         this.outputImageLayers = this.vgg19.getLayers(vggInput, 'style');
     }
 
-    runIteration(){
-        this.optimizer.minimize(this.loss,false, [this.outputImage]);
+    runIteration() {
+        if (this.iteration === Math.floor(this.iterations / 2)) {
+            const size = {
+                width:Math.floor(this.outputImage.shape[2] * 2),
+                height:Math.floor(this.outputImage.shape[1] * 2)
+            };
+            const newVar = tf.variable(tf.image.resizeBilinear(this.outputImage,[size.height, size.width]));
+            tf.dispose(this.outputImage);
+            this.outputImage = newVar;
+        }
+        this.optimizer.minimize(this.loss, false, [this.outputImage]);
     }
 }

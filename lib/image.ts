@@ -53,7 +53,7 @@ export function tensorToImage(inputs:tf.Tensor3D|tf.Tensor):Promise<Jimp>{
     });
 }
 
-export function getImageAsTensor(src:string, expandDims:boolean = false):Promise<tf.Tensor3D|tf.Tensor>{
+export function getImageAsTensor(src:string, expandDims:boolean = false):Promise<tf.Tensor3D|tf.Tensor4D|tf.Tensor|any>{
     return new Promise((resolve, reject) => {
         getImage(src).then(jimpImg => {
             const rgba = tf.tensor3d(jimpImg.bitmap.data, [jimpImg.bitmap.width, jimpImg.bitmap.height, 4]);

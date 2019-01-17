@@ -1,0 +1,25 @@
+{
+  "name": "NodeStyleTransfer",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "All Rights Reserved",
+  "scripts": {
+    "start": "ts-node index",
+    "image": "ts-node lib/image.ts",
+    "test": "mocha -r ts-node/register src/**/*.spec.ts"
+  },
+  "dependencies": {
+    "@tensorflow/tfjs-node-gpu": "^0.2.3",
+    "argparse": "^1.0.10",
+    "jimp": "^0.6.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.1.7",
+    "@types/jimp": "^0.2.28",
+    "@types/mocha": "^5.2.5",
+    "chai": "^4.2.0",
+    "mocha": "^5.2.0",
+    "ts-node": "^7.0.1",
+    "typescript": "^3.1.6"
+  }
+}

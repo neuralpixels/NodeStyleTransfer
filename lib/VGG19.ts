@@ -28,8 +28,11 @@ class VGG19{
             'conv4_1', 'conv4_2', 'conv4_3', 'conv4_4', 'pool4',
             'conv5_1', 'conv5_2', 'conv5_3', 'conv5_4', 'pool5'
         ];
+        // this.vgg19_content_layers = [
+        //     'conv4_2', 'conv5_2'
+        // ];
         this.vgg19_content_layers = [
-            'conv4_2'
+            'conv1_1', 'conv2_1', 'conv3_1', 'conv4_1'
         ];
         this.vgg19_style_layers = [
             'conv1_1', 'conv2_1', 'conv3_1', 'conv4_1'
@@ -129,6 +132,11 @@ class VGG19{
         if(floatInputs.dtype === 'int32') {
             floatInputs = tf.cast(inputs, 'float32');
             //tf.dispose(inputs);
+        }
+        if(floatInputs.shape.length === 3){
+            const expanded = tf.expandDims(floatInputs, 0);
+            // tf.dispose(floatInputs)
+            floatInputs = expanded;
         }
         // transpose rgb => bgr and adjust to mean pixel
         const chAxis = floatInputs.shape.length - 1;

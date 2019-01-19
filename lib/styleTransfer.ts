@@ -3,7 +3,8 @@ import tf from "./tensorflow";
 import VGG19 from './VGG19';
 import {getImageAsTensor, saveTensorAsImage} from './image';
 import {IVariables} from './modelLoader'
-import {valueMap, exponent, rjust} from './basic'
+import {valueMap, exponent, rjust} from './basic';
+import {isNode} from './env'
 
 const defaultCallback = (progressPercent, progressMessage, isProcessing = true): void => {
     console.log('NeuralNetRunner', {
@@ -18,12 +19,19 @@ interface Size {
     height:number
 }
 
+let modelPath;
+if(isNode){
+    modelPath = require('path').join(__dirname, '../weights/vgg19')
+} else {
+    modelPath = 'https://neuralpixels.com/wp-content/plugins/np-visualize-vgg19/model'
+}
+
 export class StyleTransfer {
     constructor(
         parameters: { content: string, style: string, output: string, iterations?: number, statusCallback?: object }
     ) {
         let {content, style, output, iterations = 100, statusCallback = defaultCallback} = parameters;
-        this.modelPath = 'https://neuralpixels.com/wp-content/plugins/np-visualize-vgg19/model';
+        this.modelPath = modelPath;
         this.content = content;
         this.style = style;
         this.output = output;

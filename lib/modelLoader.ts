@@ -97,13 +97,22 @@ export function loadRemoteVariables(modelPath:string, callback) {
             };
             // build the promises
             for (let varName in weightObj) {
+                let fixedVarName = varName;
+                // remove model scope if it exists
+                if(fixedVarName.startsWith('gen/')){
+                    fixedVarName = fixedVarName.replace('gen/','');
+                }
+
+                // replace "/" with "_"
+                fixedVarName = fixedVarName.split('/').join('_');
+
                 const weightPath = `${variablesPath}/${weightObj[varName].filename}`;
                 const weightShape = weightObj[varName].shape;
                 const weightDtype = 'dtype' in weightObj[varName] ? weightObj[varName].dtype : 'float32';
                 const weightQuantization = 'quantization' in weightObj[varName] ? weightObj[varName].quantization : null;
                 promisesArr.push(
                     loadSingleVariables(
-                        varName,
+                        fixedVarName,
                         weightPath,
                         weightShape,
                         returnVariables,

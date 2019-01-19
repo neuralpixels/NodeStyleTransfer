@@ -69,7 +69,7 @@ export class StyleTransfer {
     public isProcessing: boolean;
     public pad: number;
     public learningRate: number;
-    public optimizer: any;
+    public optimizer: tf.Optimizer;
     public outputImage: any;
     public contentLayers: any;
     public styleLayers: any;
@@ -80,7 +80,7 @@ export class StyleTransfer {
     public endSize: Size;
     public styleWeight: number;
     public contentWeight: number;
-    public contentTensor: number;
+    public contentTensor: any;
 
     finalCleanup() {
         // //tf.dispose(this.variables);
@@ -97,26 +97,17 @@ export class StyleTransfer {
             this.variables = await loadRemoteVariablesPromise(this.modelPath);
             this.vgg19 = new VGG19(this.variables);
             const contentTensorInt = await getImageAsTensor(this.content, true);
-            const contentTensor = tf.tidy(()=>{
-                const half = tf.scalar(0.5, 'float32');
-                const c = tf.cast(contentTensorInt, 'float32');
-                return c;
-                // const noise = tf.randomUniform(c.shape, 0, 127.5);
-                // const halfC = tf.mul(c, half);
-                // return tf.add(noise, halfC)
-                // return noise;
-
-            });
+            this.contentTensor = tf.cast(contentTensorInt, 'float32');
             this.startSize = {
-                width:Math.floor(contentTensor.shape[1] * 0.5),
-                height:Math.floor(contentTensor.shape[1] * 0.5)
+                width:Math.floor(this.contentTensor.shape[1] * 0.8),
+                height:Math.floor(this.contentTensor.shape[2] * 0.8)
             };
             this.endSize = {
-                width:contentTensor.shape[1],
-                height:contentTensor.shape[1]
+                width:this.contentTensor.shape[1],
+                height:this.contentTensor.shape[2]
             };
             // @ts-ignore
-            const scaledContent = tf.image.resizeBilinear(contentTensor,[this.startSize.height, this.startSize.width]);
+            const scaledContent = tf.image.resizeBilinear(this.contentTensor,[this.startSize.height, this.startSize.width]);
             this.outputImage = tf.variable(scaledContent, true, 'output');
             return true;
         } catch (e) {
@@ -255,15 +246,14 @@ export class StyleTransfer {
         return tf.tidy(()=>{
             this.computeOutputImage();
             const styleLoss = this._styleLoss();
-            const contentLoss = this._contentLoss();
-            const loss = tf.add(contentLoss, styleLoss);
-            const lossScalar = loss.asScalar();
+            // const contentLoss = this._contentLoss();
+            // const loss = tf.add(contentLoss, styleLoss);
+            const lossScalar = styleLoss.asScalar();
             //tf.dispose(styleLoss);
             let printArr = [
                 `[${rjust(this.iteration + 1, `${this.iterations}`.length)}/${this.iterations}]`,
                 `loss: ${exponent(lossScalar.dataSync(), 2)}`,
                 `style: ${exponent(styleLoss.dataSync(), 2)}`,
-                `content: ${exponent(contentLoss.dataSync(), 2)}`,
             ];
             console.log(printArr.join(' '));
             return lossScalar;
@@ -276,8 +266,7 @@ export class StyleTransfer {
         this.iteration = 0;
         // await this.preComputeContent();
         await this.preComputeStyle();
-        this.contentTensor = await getImageAsTensor(this.content, true);
-        this.preComputeContent();
+        // this.preComputeContent();
         for (let i = 0; i < iterations; i++) {
             await this.runIteration();
             this.iteration++;
@@ -311,16 +300,29 @@ export class StyleTransfer {
     }
 
     runIteration() {
+        let size:Size = {
+            width:this.outputImage.shape[2],
+            height:this.outputImage.shape[1]
+        };
         if (this.iteration === Math.floor(this.iterations / 2)) {
-            const size:Size = {
-                width:this.endSize.width,
-                height:this.endSize.height
+            size = {
+                width: this.endSize.width,
+                height: this.endSize.height
             };
-            const newVar = tf.variable(tf.image.resizeBilinear(this.outputImage,[size.height, size.width]));
+            const newVar = tf.tidy(() => {
+                const newVarScaled = tf.variable(tf.image.resizeBilinear(this.outputImage, [size.height, size.width]));
+                const contentScalar = tf.scalar(0.1);
+                const varScalar = tf.sub(tf.scalar(1.0), contentScalar);
+                const scaledContent = tf.variable(tf.image.resizeBilinear(this.contentTensor, [size.height, size.width]));
+                const contentAdd = tf.mul(scaledContent, contentScalar);
+                const varAdd = tf.mul(newVarScaled, varScalar);
+                return tf.add(varAdd, contentAdd)
+            });
             tf.dispose(this.outputImage);
-            this.outputImage = newVar;
-            this.preComputeContent();
+
+            this.outputImage = tf.variable(newVar);
         }
+
         this.optimizer.minimize(this.loss, false, [this.outputImage]);
     }
 }

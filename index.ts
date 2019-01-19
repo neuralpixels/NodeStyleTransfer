@@ -4,7 +4,7 @@ import {StyleTransfer} from './lib/styleTransfer'
 async function run(
     parameters: { content: string, style: string, output: string, iterations?:number}
 ) {
-    let {content, style, output, iterations=100} = parameters;
+    let {content, style, output, iterations=50} = parameters;
     const styleTransfer = new StyleTransfer({
         content:content,
         style:style,

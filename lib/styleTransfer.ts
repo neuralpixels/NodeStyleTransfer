@@ -116,40 +116,34 @@ export class StyleTransfer {
     }
 
     _seperated_l2_loss(y_pred, y_true) {
-        let sum_axis = [1, 2];
-        let _size = y_pred.shape[1] * y_pred.shape[2];
-        if (y_pred.shape.length === 4) {
-            sum_axis = [1, 2, 3];
-            _size = y_pred.shape[1] * y_pred.shape[2] * y_pred.shape[3];
-        }
-        const diff = tf.sub(y_pred, y_true);
-        const abs_diff = tf.abs(diff);
-        //tf.dispose(diff);
-        const square_abs_diff = tf.square(abs_diff);
-        //tf.dispose(diff);
-        const reduced_abs_diff = tf.sum(square_abs_diff, sum_axis);
-        //tf.dispose(square_abs_diff);
-        const two = tf.scalar(2.0, 'float32');
-        const l2 = tf.div(reduced_abs_diff, two);
-        //tf.dispose(reduced_abs_diff);
-        const l2t2 = tf.mul(two, l2);
-        //tf.dispose([two, l2]);
-        const size = tf.scalar(_size, 'float32');
-        const sepl2 = tf.div(l2t2, size);
-        //tf.dispose([size, l2t2]);
-        return sepl2;
+        return tf.tidy(()=>{
+            let sum_axis = [1, 2];
+            let _size = y_pred.shape[1] * y_pred.shape[2];
+            if (y_pred.shape.length === 4) {
+                sum_axis = [1, 2, 3];
+                _size = y_pred.shape[1] * y_pred.shape[2] * y_pred.shape[3];
+            }
+            const diff = tf.sub(y_pred, y_true);
+            const abs_diff = tf.abs(diff);
+            const square_abs_diff = tf.square(abs_diff);
+            const reduced_abs_diff = tf.sum(square_abs_diff, sum_axis);
+            const two = tf.scalar(2.0, 'float32');
+            const l2 = tf.div(reduced_abs_diff, two);
+            const l2t2 = tf.mul(two, l2);
+            const size = tf.scalar(_size, 'float32');
+            return tf.div(l2t2, size);
+        });
     }
 
     _convert_to_gram_matrix(inputs) {
-        const [batch, height, width, filters] = inputs.shape;
-        const feats = tf.reshape(inputs, [batch, height * width, filters]);
-        const feats_t = tf.transpose(feats, [0, 2, 1]);
-        const grams_raw = tf.matMul(feats_t, feats);
-        //tf.dispose([feats, feats_t]);
-        const size = tf.scalar(height * width * filters, 'float32');
-        const gram_matrix = tf.div(grams_raw, size);
-        //tf.dispose([grams_raw, size]);
-        return gram_matrix
+        return tf.tidy(()=>{
+            const [batch, height, width, filters] = inputs.shape;
+            const feats = tf.reshape(inputs, [batch, height * width, filters]);
+            const feats_t = tf.transpose(feats, [0, 2, 1]);
+            const grams_raw = tf.matMul(feats_t, feats);
+            const size = tf.scalar(height * width * filters, 'float32');
+            return tf.div(grams_raw, size);
+        });
     }
 
     _styleLoss() {
@@ -178,64 +172,6 @@ export class StyleTransfer {
             const avgLayerLoss = tf.div(loss, numLayers);
             //tf.dispose([numLayers, loss]);
             const styleWeight = tf.scalar(this.styleWeight, 'float32');
-            const lossOutput = tf.mul(avgLayerLoss, styleWeight);
-            //tf.dispose([avgLayerLoss, styleWeight]);
-            return lossOutput;
-        });
-    }
-
-    _contentLoss(){
-        // return tf.tidy(()=>{
-        //     let loss = tf.scalar(0.0);
-        //     let next = loss;
-        //     for(let i = 0; i < this.vgg19.vgg19_content_layers.length; i++){
-        //         const layerName = this.vgg19.vgg19_content_layers[i];
-        //         const rawLayerLoss = this._seperated_l2_loss(
-        //             this.outputImageLayers[layerName],
-        //             this.contentLayers[layerName]
-        //         );
-        //         const layerLoss = tf.mean(rawLayerLoss);
-        //         // tf.dispose(rawLayerLoss);
-        //         const layerWeight = tf.scalar(this.vgg19.vgg19_layer_weights[layerName]['content'], 'float32');
-        //         const weightedLoss = tf.mul(layerLoss, layerWeight);
-        //         // tf.dispose([layerLoss, layerWeight]);
-        //         next = tf.add(weightedLoss, loss);
-        //         // tf.dispose(loss);
-        //         loss = next;
-        //     }
-        //     const numLayers = tf.scalar(this.vgg19.vgg19_content_layers.length, 'float32');
-        //     const avgLayerLoss = tf.div(loss,numLayers);
-        //     // tf.dispose([numLayers, loss]);
-        //     const contentWeight = tf.scalar(this.contentWeight, 'float32');
-        //     const lossOutput = tf.mul(avgLayerLoss, contentWeight);
-        //     // tf.dispose([avgLayerLoss, contentWeight]);
-        //     return lossOutput;
-        // });
-        return tf.tidy(()=>{
-            let loss = tf.scalar(0.0);
-            let next = loss;
-            for (let i = 0; i < this.vgg19.vgg19_style_layers.length; i++) {
-                const layerName = this.vgg19.vgg19_style_layers[i];
-                const outputImageGrams = this._convert_to_gram_matrix(this.outputImageLayers[layerName]);
-                const styleGrams = this._convert_to_gram_matrix(this.contentLayers[layerName]);
-                const rawLayerLoss = this._seperated_l2_loss(
-                    outputImageGrams,
-                    styleGrams
-                );
-                //tf.dispose([styleGrams, outputImageGrams]);
-                const layerLoss = tf.mean(rawLayerLoss);
-                //tf.dispose(rawLayerLoss);
-                const layerWeight = tf.scalar(this.vgg19.vgg19_layer_weights[layerName]['content'], 'float32');
-                const weightedLoss = tf.mul(layerLoss, layerWeight);
-                //tf.dispose([layerLoss, layerWeight]);
-                next = tf.add(weightedLoss, loss);
-                //tf.dispose(loss);
-                loss = next;
-            }
-            const numLayers = tf.scalar(this.vgg19.vgg19_style_layers.length, 'float32');
-            const avgLayerLoss = tf.div(loss, numLayers);
-            //tf.dispose([numLayers, loss]);
-            const styleWeight = tf.scalar(this.contentWeight, 'float32');
             const lossOutput = tf.mul(avgLayerLoss, styleWeight);
             //tf.dispose([avgLayerLoss, styleWeight]);
             return lossOutput;
@@ -273,17 +209,6 @@ export class StyleTransfer {
         }
         await saveTensorAsImage(this.outputImage.clone(), this.output)
         // this.finalCleanup();
-    }
-
-    preComputeContent() {
-        // const content = tf.fromPixels(document.getElementById('content-canvas'));
-        tf.dispose([this.contentLayers]);
-        const resizedContent = tf.image.resizeBilinear(
-            this.contentTensor,
-            [this.outputImage.shape[1], this.outputImage.shape[2]]
-        );
-        const vggInput = this.vgg19.prepareInput(resizedContent);
-        this.contentLayers = this.vgg19.getLayers(vggInput, 'content');
     }
 
     async preComputeStyle() {

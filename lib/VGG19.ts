@@ -112,47 +112,40 @@ class VGG19{
     public vgg19_layer_weights:Vgg19LayerWeights;
 
     _pool(inputs) {
-        const pool = tf.maxPool(inputs, [2, 2], [2, 2], 'same');
-        //tf.dispose(inputs);
-        return pool;
+        return tf.tidy(()=>{
+            return tf.maxPool(inputs, [2, 2], [2, 2], 'same');
+        });
     }
     _conv(inputs, name){
-        const conv = tf.conv2d(inputs, this.variables[`${name}_kernel`], [1, 1], 'same');
-        //tf.dispose(inputs);
-        const bias = biasAdd(conv, this.variables[`${name}_bias`]);
-        //tf.dispose(conv);
-        const activation = tf.relu(bias);
-        //tf.dispose(bias);
-        return activation;
+        return tf.tidy(()=>{
+            const conv = tf.conv2d(inputs, this.variables[`${name}_kernel`], [1, 1], 'same');
+            const bias = biasAdd(conv, this.variables[`${name}_bias`]);
+            return tf.relu(bias);
+        });
     }
 
     prepareInput(inputs){
-        let floatInputs = inputs;
-        // convert input to float32 if not already
-        if(floatInputs.dtype === 'int32') {
-            floatInputs = tf.cast(inputs, 'float32');
-            //tf.dispose(inputs);
-        }
-        if(floatInputs.shape.length === 3){
-            const expanded = tf.expandDims(floatInputs, 0);
-            // tf.dispose(floatInputs)
-            floatInputs = expanded;
-        }
-        // transpose rgb => bgr and adjust to mean pixel
-        const chAxis = floatInputs.shape.length - 1;
-        const [r, g, b] = tf.split(floatInputs, 3, chAxis);
-        //tf.dispose(floatInputs);
-        const vggMean = [tf.scalar(103.939), tf.scalar(116.779), tf.scalar(123.68)];
-        const scaledArr = [
-            tf.sub(b, vggMean[0]),
-            tf.sub(g, vggMean[1]),
-            tf.sub(r, vggMean[2])
-        ];
-        //tf.dispose([r, g, b]);
-        //tf.dispose(vggMean);
-        const preparedInput = tf.concat(scaledArr, chAxis);
-        //tf.dispose(scaledArr);
-        return preparedInput;
+        return tf.tidy(()=>{
+            let floatInputs = inputs;
+            // convert input to float32 if not already
+            if(floatInputs.dtype === 'int32') {
+                floatInputs = tf.cast(inputs, 'float32');
+            }
+            if(floatInputs.shape.length === 3){
+                const expanded = tf.expandDims(floatInputs, 0);
+                floatInputs = expanded;
+            }
+            // transpose rgb => bgr and adjust to mean pixel
+            const chAxis = floatInputs.shape.length - 1;
+            const [r, g, b] = tf.split(floatInputs, 3, chAxis);
+            const vggMean = [tf.scalar(103.939), tf.scalar(116.779), tf.scalar(123.68)];
+            const scaledArr = [
+                tf.sub(b, vggMean[0]),
+                tf.sub(g, vggMean[1]),
+                tf.sub(r, vggMean[2])
+            ];
+            return tf.concat(scaledArr, chAxis);
+        });
     }
 
     getLayers(inputs, type='content'){

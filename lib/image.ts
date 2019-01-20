@@ -16,21 +16,24 @@ export function getImage(src:string):Promise<Jimp>{
 
 export function tensorToImage(inputs:tf.Tensor3D|tf.Tensor):Promise<Jimp>{
     return new Promise((resolve, reject) => {
-        const transposed = tf.transpose(inputs, [1, 0, 2]);
-        const clipped = tf.clipByValue(transposed,0, 255);
-        tf.dispose(transposed);
-        let dtyped = null;
-        if(inputs.dtype !== 'int32'){
-            dtyped = tf.cast(clipped, 'int32');
+        const rgba = tf.tidy(()=>{
+            const transposed = tf.transpose(inputs, [1, 0, 2]);
+            const clipped = tf.clipByValue(transposed,0, 255);
+            tf.dispose(transposed);
+            let dtyped = null;
+            if(inputs.dtype !== 'int32'){
+                dtyped = tf.cast(clipped, 'int32');
+                tf.dispose(clipped);
+            } else {
+                dtyped = clipped;
+            }
+            tf.dispose(inputs);
             tf.dispose(clipped);
-        } else {
-            dtyped = clipped;
-        }
-        tf.dispose(inputs);
-        tf.dispose(clipped);
-        const alpha = tf.fill([transposed.shape[0], transposed.shape[0], 1], 255, "int32");
-        const rgba = tf.concat3d([dtyped, alpha], 2);
-        tf.dispose([clipped, alpha]);
+            const alpha = tf.fill([transposed.shape[0], transposed.shape[0], 1], 255, "int32");
+            const out = tf.concat3d([dtyped, alpha], 2);
+            tf.dispose([clipped, alpha]);
+            return out;
+        });
         const width = rgba.shape[0];
         const height = rgba.shape[1];
         rgba.data().then(rawBuffer => {
@@ -56,18 +59,21 @@ export function tensorToImage(inputs:tf.Tensor3D|tf.Tensor):Promise<Jimp>{
 export function getImageAsTensor(src:string, expandDims:boolean = false):Promise<tf.Tensor3D|tf.Tensor4D|tf.Tensor|any>{
     return new Promise((resolve, reject) => {
         getImage(src).then(jimpImg => {
-            const rgba = tf.tensor3d(jimpImg.bitmap.data, [jimpImg.bitmap.width, jimpImg.bitmap.height, 4]);
-            const rgb = tf.slice3d(rgba,[0, 0, 0], [jimpImg.bitmap.width, jimpImg.bitmap.height, 3]);
-            tf.dispose(rgba);
-            const transposed = tf.transpose(rgb, [1, 0, 2]);
-            tf.dispose(rgb);
-            if(expandDims){
-                const expanded = tf.expandDims(transposed, 0);
-                tf.dispose(transposed);
-                resolve(expanded)
-            } else {
-                resolve(transposed);
-            }
+            const img = tf.tidy(()=>{
+                const rgba = tf.tensor3d(jimpImg.bitmap.data, [jimpImg.bitmap.width, jimpImg.bitmap.height, 4]);
+                const rgb = tf.slice3d(rgba,[0, 0, 0], [jimpImg.bitmap.width, jimpImg.bitmap.height, 3]);
+                tf.dispose(rgba);
+                const transposed = tf.transpose(rgb, [1, 0, 2]);
+                tf.dispose(rgb);
+                if(expandDims){
+                    const expanded = tf.expandDims(transposed, 0);
+                    tf.dispose(transposed);
+                    return expanded
+                } else {
+                    return transposed;
+                }
+            });
+            resolve(img);
         }).catch(err => {
             reject(err)
         });

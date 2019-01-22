@@ -5,6 +5,7 @@ import {getImageAsTensor, saveTensorAsImage} from './image';
 import {IVariables} from './modelLoader'
 import {valueMap, exponent, rjust} from './basic';
 import {isNode} from './env'
+import AggressiveOptimizer from './aggressive_optimizer';
 
 const defaultCallback = (progressPercent, progressMessage, isProcessing = true): void => {
     console.log('NeuralNetRunner', {
@@ -46,7 +47,8 @@ export class StyleTransfer {
         this.learningRate = 25.5;
         this.iterations = iterations;
         this.iteration = 0;
-        this.optimizer = tf.train.adam(this.learningRate);
+        // this.optimizer = tf.train.adam(this.learningRate);
+        this.optimizer = new AggressiveOptimizer();
 
         this.styleWeight = 7.5e-1;
         this.contentWeight = 1e0;
@@ -69,7 +71,7 @@ export class StyleTransfer {
     public isProcessing: boolean;
     public pad: number;
     public learningRate: number;
-    public optimizer: tf.Optimizer;
+    public optimizer: tf.Optimizer|AggressiveOptimizer;
     public outputImage: any;
     public contentLayers: any;
     public styleLayers: any;
@@ -99,8 +101,8 @@ export class StyleTransfer {
             const contentTensorInt = await getImageAsTensor(this.content, true);
             this.contentTensor = tf.cast(contentTensorInt, 'float32');
             this.startSize = {
-                width:Math.floor(this.contentTensor.shape[1] * 0.8),
-                height:Math.floor(this.contentTensor.shape[2] * 0.8)
+                width:Math.floor(this.contentTensor.shape[1] * 0.5),
+                height:Math.floor(this.contentTensor.shape[2] * 0.5)
             };
             this.endSize = {
                 width:this.contentTensor.shape[1],
@@ -246,6 +248,9 @@ export class StyleTransfer {
             tf.dispose(this.outputImage);
 
             this.outputImage = tf.variable(newVar);
+            if(this.optimizer instanceof AggressiveOptimizer){
+                this.optimizer.reset();
+            }
         }
 
         this.optimizer.minimize(this.loss, false, [this.outputImage]);

@@ -56,7 +56,11 @@ export function tensorToImage(inputs:tf.Tensor3D|tf.Tensor):Promise<Jimp>{
     });
 }
 
-export function getImageAsTensor(src:string, expandDims:boolean = false):Promise<tf.Tensor3D|tf.Tensor4D|tf.Tensor|any>{
+export function getImageAsTensor(
+    src:string,
+    expandDims:boolean = false,
+    dtype:"float32" | "int32"='float32'
+):Promise<tf.Tensor3D|tf.Tensor4D|tf.Tensor|any>{
     return new Promise((resolve, reject) => {
         getImage(src).then(jimpImg => {
             const img = tf.tidy(()=>{
@@ -65,12 +69,18 @@ export function getImageAsTensor(src:string, expandDims:boolean = false):Promise
                 tf.dispose(rgba);
                 const transposed = tf.transpose(rgb, [1, 0, 2]);
                 tf.dispose(rgb);
+                let castedImg;
+                if(dtype == 'float32'){
+                    castedImg = tf.cast(transposed, 'float32')
+                } else {
+                    castedImg = transposed;
+                }
                 if(expandDims){
-                    const expanded = tf.expandDims(transposed, 0);
-                    tf.dispose(transposed);
+                    const expanded = tf.expandDims(castedImg, 0);
+                    tf.dispose(castedImg);
                     return expanded
                 } else {
-                    return transposed;
+                    return castedImg;
                 }
             });
             resolve(img);

@@ -6,13 +6,15 @@
   "scripts": {
     "start": "ts-node index",
     "image": "ts-node lib/image.ts",
-    "test": "mocha -r ts-node/register src/**/*.spec.ts"
+    "test": "mocha -r ts-node/register **/*.spec.ts"
   },
   "dependencies": {
     "@tensorflow/tfjs-node-gpu": "^0.2.3",
+    "@types/numeral": "^0.0.25",
     "argparse": "^1.0.10",
     "axios": "^0.18.0",
-    "jimp": "^0.6.0"
+    "jimp": "^0.6.0",
+    "numeral": "^2.0.6"
   },
   "devDependencies": {
     "@types/argparse": "^1.0.35",

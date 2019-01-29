@@ -124,6 +124,17 @@ class VGG19{
         });
     }
 
+    _convert_to_gram_matrix(inputs) {
+        return tf.tidy(()=>{
+            const [batch, height, width, filters] = inputs.shape;
+            const feats = tf.reshape(inputs, [batch, height * width, filters]);
+            const feats_t = tf.transpose(feats, [0, 2, 1]);
+            const grams_raw = tf.matMul(feats_t, feats);
+            const size = tf.scalar(height * width * filters, 'float32');
+            return tf.div(grams_raw, size);
+        });
+    }
+
     prepareInput(inputs){
         return tf.tidy(()=>{
             let floatInputs = inputs;
@@ -148,41 +159,47 @@ class VGG19{
         });
     }
 
-    getLayers(inputs, type='content'){
-        let returnLayers = {};
-        let layersToGet;
-        if(type === 'content'){
-            layersToGet = this.vgg19_content_layers;
-        } else if(type === 'style') {
-            layersToGet = this.vgg19_style_layers;
-        } else {
-            // get both
-            layersToGet = this.vgg19_style_layers.concat(this.vgg19_content_layers);
-        }
-        layersToGet.sort();
-        let lastLayer = layersToGet[layersToGet.length - 1];
-        let next = inputs;
-        for(let i = 0; i < this.vgg19_layers.length; i++){
-            let layer = this.vgg19_layers[i];
-            if(layer.includes('conv')){
-                // do convolution
-                next = this._conv(next, layer);
-                // clone it to return object if it is a layer to get
-                if(layersToGet.includes(layer)){
-                    returnLayers[layer] = next.clone();
+    getLayers(inputs, type='content', asGram=false){
+        return tf.tidy(()=>{
+            let returnLayers = {};
+            let layersToGet;
+            if(type === 'content'){
+                layersToGet = this.vgg19_content_layers;
+            } else if(type === 'style') {
+                layersToGet = this.vgg19_style_layers;
+            } else {
+                // get both
+                layersToGet = this.vgg19_style_layers.concat(this.vgg19_content_layers);
+            }
+            layersToGet.sort();
+            let lastLayer = layersToGet[layersToGet.length - 1];
+            let next = inputs;
+            for(let i = 0; i < this.vgg19_layers.length; i++){
+                let layer = this.vgg19_layers[i];
+                if(layer.includes('conv')){
+                    // do convolution
+                    next = this._conv(next, layer);
+                    // clone it to return object if it is a layer to get
+                    if(layersToGet.includes(layer)){
+                        if(asGram){
+                            returnLayers[layer] = this._convert_to_gram_matrix(next);
+                        } else {
+                            returnLayers[layer] = next.clone();
+                        }
+                    }
+                } else if(layer.includes('pool')) {
+                    // do max pool
+                    next = this._pool(next);
                 }
-            } else if(layer.includes('pool')) {
-                // do max pool
-                next = this._pool(next);
-            }
 
-            // stop if this was last layer
-            if(layer === lastLayer){
-                break;
+                // stop if this was last layer
+                if(layer === lastLayer){
+                    break;
+                }
             }
-        }
-        //tf.dispose(next);
+            //tf.dispose(next);
         return returnLayers;
+        });
     }
 }
 

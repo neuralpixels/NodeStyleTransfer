@@ -25,8 +25,5 @@ parser.addArgument('--gpu', {
     help: 'GPU to use'
 });
 const args = parser.parseArgs();
-process.env['TF_CPP_MIN_LOG_LEVEL'] = '2';
-process.env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID";
-process.env["CUDA_VISIBLE_DEVICES"] = `${args.gpu}`;
 
 export default args

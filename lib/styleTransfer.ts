@@ -177,7 +177,7 @@ export class StyleTransfer {
                     const weightedLoss = tf.mul(layerLoss, layerWeight);
                     //tf.dispose([layerLoss, layerWeight]);
                     next = tf.add(weightedLoss, loss);
-                    //tf.dispose(loss);
+                    tf.dispose(loss);
                     return next;
                 });
             }

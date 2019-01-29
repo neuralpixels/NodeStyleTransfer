@@ -86,6 +86,7 @@ export default class AggressiveOptimizer{
 
             if(this.correction === null || this.gradientOld === null){
                 isFirstIteration = true;
+                tf.dispose(this.correction);
                 this.correction = tf.mul(gradient, negOne);
             } else {
                 isFirstIteration = false;
@@ -174,7 +175,10 @@ export default class AggressiveOptimizer{
                 const meanCorrection = tf.mean(tf.abs(this.correction));
                 const absValue = tf.abs(value);
                 const correctionBase = tf.log1p(absValue);
-                this.correctionAdjustment = tf.keep(tf.div(correctionBase, meanCorrection));
+                const correctionAdjustment = tf.div(correctionBase, meanCorrection);
+                tf.dispose(this.correctionAdjustment);
+                this.correctionAdjustment = correctionAdjustment;
+                tf.keep(this.correctionAdjustment);
 
                 let adjustment;
                 if(isFirstIteration){

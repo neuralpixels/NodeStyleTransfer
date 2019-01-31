@@ -135,7 +135,7 @@ class VGG19{
         });
     }
 
-    prepareInput(inputs){
+    prepareInput(inputs):tf.Tensor4D{
         return tf.tidy(()=>{
             let floatInputs = inputs;
             // convert input to float32 if not already
@@ -155,11 +155,35 @@ class VGG19{
                 tf.sub(g, vggMean[1]),
                 tf.sub(r, vggMean[2])
             ];
-            return tf.concat(scaledArr, chAxis);
+            // @ts-ignore
+            return tf.concat4d(scaledArr, chAxis);
+
         });
     }
 
-    getLayers(inputs, type='content', asGram=false){
+    layerSlice(inputs:tf.Tensor4D, layerName:string):tf.Tensor4D{
+        const block_num = parseInt(layerName.slice(4, 5));
+        const s = Math.floor(32 / Math.pow(2, block_num));
+        if(s > 0){
+            // return inputs[:, s:-s, s:-s, :]
+            const [b, r, c, f] = inputs.shape;
+            return tf.slice4d(
+                inputs,
+                [0, s, s, 0],
+                [b, r - (s * 2), c - (s * 2), f]
+            )
+        }
+        else {
+            return inputs
+        }
+    }
+
+    getLayers(
+        inputs:tf.Tensor4D,
+        type:'content'|'style'='content',
+        asGram:boolean=false,
+        slice:boolean=false
+    ){
         return tf.tidy(()=>{
             let returnLayers = {};
             let layersToGet;
@@ -182,7 +206,15 @@ class VGG19{
                     // clone it to return object if it is a layer to get
                     if(layersToGet.includes(layer)){
                         if(asGram){
-                            returnLayers[layer] = this._convert_to_gram_matrix(next);
+                            if(slice){
+                                returnLayers[layer] = tf.tidy(()=>{
+                                    const slicedLayer = this.layerSlice(next, layer);
+                                    return this._convert_to_gram_matrix(slicedLayer);
+                                })
+                            } else {
+                                returnLayers[layer] = this._convert_to_gram_matrix(next);
+                            }
+
                         } else {
                             returnLayers[layer] = next.clone();
                         }
